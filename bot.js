@@ -40,8 +40,17 @@ async function checkChanges() {
   lastItems = items;
 }
 
-client.once("ready", () => {
+client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
+
+  // 🔹 TEST: Fetch inventory immediately and log first 5 items
+  const testItems = await fetchInventory();
+  if (testItems) {
+    console.log("Fetched inventory (first 5 items):", testItems.slice(0, 5));
+  } else {
+    console.log("Failed to fetch inventory for test.");
+  }
+
   setInterval(checkChanges, 60 * 1000); // check every 60s
 });
 
