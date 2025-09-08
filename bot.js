@@ -12,7 +12,7 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 let lastItems = [];
 
-// Fetch inventory with User-Agent and reduced count
+// Fetch inventory including duplicates
 async function fetchInventory() {
   const url = `https://steamcommunity.com/inventory/${STEAMID64}/${APPID}/${CONTEXTID}?l=english&count=500`;
   try {
@@ -24,8 +24,18 @@ async function fetchInventory() {
       return null;
     }
     const data = await res.json();
-    console.log("Fetched items count:", data.descriptions?.length || 0);
-    return data.descriptions?.map(item => item.market_hash_name) || [];
+    if (!data.assets || !data.descriptions) return [];
+
+    // Map each asset to its market_hash_name
+    const items = data.assets.map(asset => {
+      const desc = data.descriptions.find(
+        d => d.classid === asset.classid && d.instanceid === asset.instanceid
+      );
+      return desc ? desc.market_hash_name : null;
+    }).filter(Boolean);
+
+    console.log("Fetched items count (including duplicates):", items.length);
+    return items;
   } catch (err) {
     console.log("Fetch failed:", err);
     return null;
@@ -35,7 +45,10 @@ async function fetchInventory() {
 // Check for inventory changes and post to Discord
 async function checkChanges() {
   const items = await fetchInventory();
-  if (!items) return;
+  if (!items) {
+    console.log("Inventory fetch failed, skipping this interval.");
+    return;
+  }
 
   if (lastItems.length > 0) {
     const added = items.filter(x => !lastItems.includes(x));
