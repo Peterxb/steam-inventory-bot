@@ -1,5 +1,6 @@
 import { Client, GatewayIntentBits } from "discord.js";
 import fetch from "node-fetch";
+import express from "express";
 
 // Load secrets from environment variables
 const TOKEN = process.env.TOKEN;
@@ -118,3 +119,15 @@ client.once("ready", async () => {
 });
 
 client.login(TOKEN);
+
+// --------------------------
+// Express web server for UptimeRobot
+// --------------------------
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+app.get("/", (req, res) => {
+  res.send("✅ Bot is alive!");
+});
+
+app.listen(PORT, () => console.log(`✅ Web server running on port ${PORT}`));
