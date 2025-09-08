@@ -12,14 +12,27 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 let lastItems = [];
 
+// Fetch inventory with proper User-Agent to avoid Steam blocking
 async function fetchInventory() {
   const url = `https://steamcommunity.com/inventory/${STEAMID64}/${APPID}/${CONTEXTID}?l=english&count=5000`;
-  const res = await fetch(url);
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data.descriptions?.map(item => item.market_hash_name) || [];
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; InventoryBot/1.0)" }
+    });
+    if (!res.ok) {
+      console.log("HTTP Error:", res.status);
+      return null;
+    }
+    const data = await res.json();
+    console.log("Fetched items count:", data.descriptions?.length || 0);
+    return data.descriptions?.map(item => item.market_hash_name) || [];
+  } catch (err) {
+    console.log("Fetch failed:", err);
+    return null;
+  }
 }
 
+// Check for inventory changes and post to Discord
 async function checkChanges() {
   const items = await fetchInventory();
   if (!items) return;
@@ -43,7 +56,7 @@ async function checkChanges() {
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
-  // 🔹 TEST: Fetch inventory immediately and log first 5 items
+  // 🔹 Immediate test fetch
   const testItems = await fetchInventory();
   if (testItems) {
     console.log("Fetched inventory (first 5 items):", testItems.slice(0, 5));
@@ -51,7 +64,8 @@ client.once("ready", async () => {
     console.log("Failed to fetch inventory for test.");
   }
 
-  setInterval(checkChanges, 60 * 1000); // check every 60s
+  // Start regular interval for checking changes
+  setInterval(checkChanges, 60 * 1000); // every 60s
 });
 
 client.login(TOKEN);
