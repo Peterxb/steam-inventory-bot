@@ -1,7 +1,7 @@
 import { Client, GatewayIntentBits } from "discord.js";
 import fetch from "node-fetch";
 
-// Load secrets from environment variables (Render sets these in the dashboard)
+// Load secrets from environment variables
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
 const STEAMID64 = process.env.STEAMID64;
@@ -42,6 +42,33 @@ async function fetchInventory() {
   }
 }
 
+// Compare old vs new inventory counts
+function diffInventories(oldItems, newItems) {
+  const added = [];
+  const removed = [];
+
+  const oldCounts = oldItems.reduce((acc, name) => {
+    acc[name] = (acc[name] || 0) + 1;
+    return acc;
+  }, {});
+
+  const newCounts = newItems.reduce((acc, name) => {
+    acc[name] = (acc[name] || 0) + 1;
+    return acc;
+  }, {});
+
+  const allNames = new Set([...Object.keys(oldCounts), ...Object.keys(newCounts)]);
+
+  allNames.forEach(name => {
+    const oldCount = oldCounts[name] || 0;
+    const newCount = newCounts[name] || 0;
+    if (newCount > oldCount) added.push(`${name} x${newCount - oldCount}`);
+    if (oldCount > newCount) removed.push(`${name} x${oldCount - newCount}`);
+  });
+
+  return { added, removed };
+}
+
 // Check for inventory changes and post to Discord
 async function checkChanges() {
   const items = await fetchInventory();
@@ -51,15 +78,18 @@ async function checkChanges() {
   }
 
   if (lastItems.length > 0) {
-    const added = items.filter(x => !lastItems.includes(x));
-    const removed = lastItems.filter(x => !items.includes(x));
+    const { added, removed } = diffInventories(lastItems, items);
 
     if (added.length || removed.length) {
       const channel = await client.channels.fetch(CHANNEL_ID);
-      let msg = "⚡ Inventory change detected:\n";
-      if (added.length) msg += `🟢 Added: ${added.join(", ")}\n`;
-      if (removed.length) msg += `🔴 Removed: ${removed.join(", ")}\n`;
-      channel.send(msg);
+      if (channel?.isTextBased?.()) {
+        let msg = "⚡ Inventory change detected:\n";
+        if (added.length) msg += `🟢 Added: ${added.join(", ")}\n`;
+        if (removed.length) msg += `🔴 Removed: ${removed.join(", ")}\n`;
+        channel.send(msg);
+      } else {
+        console.log("Cannot send message, channel not found or not text-based.");
+      }
     }
   }
 
@@ -69,7 +99,13 @@ async function checkChanges() {
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
-  // 🔹 Immediate test fetch
+  // 🔹 Force test message in Discord
+  const testChannel = await client.channels.fetch(CHANNEL_ID);
+  if (testChannel?.isTextBased?.()) {
+    testChannel.send("✅ Bot is online and ready to post inventory changes!");
+  }
+
+  // 🔹 Immediate test fetch of inventory
   const testItems = await fetchInventory();
   if (testItems) {
     console.log("Fetched inventory (first 5 items):", testItems.slice(0, 5));
