@@ -12,9 +12,9 @@ const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
 let lastItems = [];
 
-// Fetch inventory with proper User-Agent to avoid Steam blocking
+// Fetch inventory with User-Agent and reduced count
 async function fetchInventory() {
-  const url = `https://steamcommunity.com/inventory/${STEAMID64}/${APPID}/${CONTEXTID}?l=english&count=5000`;
+  const url = `https://steamcommunity.com/inventory/${STEAMID64}/${APPID}/${CONTEXTID}?l=english&count=500`;
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; InventoryBot/1.0)" }
