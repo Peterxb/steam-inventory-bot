@@ -84,7 +84,8 @@ async function checkChanges() {
     if (added.length || removed.length) {
       const channel = await client.channels.fetch(CHANNEL_ID);
       if (channel?.isTextBased?.()) {
-        let msg = "⚡ Inventory change detected:\n";
+        // Mention your Discord ID here
+        let msg = `<@677917996450054170> ⚡ Inventory change detected:\n`;
         if (added.length) msg += `🟢 Added: ${added.join(", ")}\n`;
         if (removed.length) msg += `🔴 Removed: ${removed.join(", ")}\n`;
         channel.send(msg);
