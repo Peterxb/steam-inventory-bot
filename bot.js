@@ -2,26 +2,44 @@ import { Client, GatewayIntentBits } from "discord.js";
 import fetch from "node-fetch";
 import express from "express";
 
+// ------------------------------------
+// 1. CONFIGURATION AND SECRETS
+// ------------------------------------
+
 // Load secrets from environment variables
 const TOKEN = process.env.TOKEN;
 const CHANNEL_ID = process.env.CHANNEL_ID;
-const STEAMID64 = process.env.STEAMID64;
-const APPID = process.env.APPID || 730;     // default CS2
+// Load MULTIPLE Steam IDs from a comma-separated list
+const STEAM_IDS = (process.env.STEAM_IDS || "").split(',')
+  .map(id => id.trim())
+  .filter(Boolean); // Clean up and ensure we have at least one ID
+
+const APPID = process.env.APPID || 730;      // default CS2
 const CONTEXTID = process.env.CONTEXTID || 2;
+
+if (STEAM_IDS.length === 0) {
+  console.error("FATAL: No Steam IDs found in the STEAM_IDS environment variable. Please set it.");
+  process.exit(1);
+}
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 
-let lastItems = [];
+// Use an object to store the last inventory (state) for EACH Steam ID
+let lastInventories = {}; // { 'steamid1': [...items], 'steamid2': [...items], ... }
 
-// Fetch inventory including duplicates
-async function fetchInventory() {
-  const url = `https://steamcommunity.com/inventory/${STEAMID64}/${APPID}/${CONTEXTID}?l=english&count=500`;
+// ------------------------------------
+// 2. HELPER FUNCTIONS
+// ------------------------------------
+
+// Fetch inventory for a specific Steam ID
+async function fetchInventory(steamId) {
+  const url = `https://steamcommunity.com/inventory/${steamId}/${APPID}/${CONTEXTID}?l=english&count=500`;
   try {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; InventoryBot/1.0)" }
     });
     if (!res.ok) {
-      console.log("HTTP Error:", res.status);
+      console.log(`HTTP Error for ${steamId}:`, res.status);
       return null;
     }
     const data = await res.json();
@@ -35,10 +53,10 @@ async function fetchInventory() {
       return desc ? desc.market_hash_name : null;
     }).filter(Boolean);
 
-    console.log("Fetched items count (including duplicates):", items.length);
+    console.log(`Fetched items count for ${steamId}: ${items.length}`);
     return items;
   } catch (err) {
-    console.log("Fetch failed:", err);
+    console.log(`Fetch failed for ${steamId}:`, err);
     return null;
   }
 }
@@ -70,49 +88,69 @@ function diffInventories(oldItems, newItems) {
   return { added, removed };
 }
 
-// Check for inventory changes and post to Discord
+// ------------------------------------
+// 3. MAIN CHECKER LOGIC
+// ------------------------------------
+
+// Iterate through all Steam IDs and check for inventory changes
 async function checkChanges() {
-  const items = await fetchInventory();
-  if (!items) {
-    console.log("Inventory fetch failed, skipping this interval.");
-    return;
-  }
+  console.log(`Starting inventory check for ${STEAM_IDS.length} IDs...`);
 
-  if (lastItems.length > 0) {
-    const { added, removed } = diffInventories(lastItems, items);
+  for (const steamId of STEAM_IDS) {
+    const newItems = await fetchInventory(steamId);
+    if (!newItems) {
+      console.log(`Inventory fetch failed for ${steamId}, skipping this interval.`);
+      continue;
+    }
 
-    if (added.length || removed.length) {
-      const channel = await client.channels.fetch(CHANNEL_ID);
-      if (channel?.isTextBased?.()) {
-        // Mention your Discord ID here
-        let msg = `<@677917996450054170> ⚡ Inventory change detected:\n`;
-        if (added.length) msg += `🟢 Added: ${added.join(", ")}\n`;
-        if (removed.length) msg += `🔴 Removed: ${removed.join(", ")}\n`;
-        channel.send(msg);
-      } else {
-        console.log("Cannot send message, channel not found or not text-based.");
+    const lastItems = lastInventories[steamId]; // Get the last known state for THIS ID
+
+    // Only compare if we have a previous state AND it's not the first run
+    if (lastItems && lastItems.length > 0) {
+      const { added, removed } = diffInventories(lastItems, newItems);
+
+      if (added.length || removed.length) {
+        const channel = await client.channels.fetch(CHANNEL_ID);
+        if (channel?.isTextBased?.()) {
+          // You can modify the mention and message as needed
+          let msg = `<@677917996450054170> ⚡ Inventory change detected for **STEAM ID: ${steamId}**:\n`;
+          if (added.length) msg += `🟢 Added: ${added.join(", ")}\n`;
+          if (removed.length) msg += `🔴 Removed: ${removed.join(", ")}\n`;
+          
+          channel.send(msg);
+        } else {
+          console.log(`Cannot send message for ${steamId}, channel not found or not text-based.`);
+        }
       }
     }
-  }
 
-  lastItems = items;
+    // Update the state for the current Steam ID
+    lastInventories[steamId] = newItems;
+  }
+  console.log("All inventory checks complete.");
 }
+
+// ------------------------------------
+// 4. DISCORD CLIENT AND BOOTSTRAP
+// ------------------------------------
 
 client.once("ready", async () => {
   console.log(`✅ Logged in as ${client.user.tag}`);
 
-  // 🔹 Force test message in Discord
-  const testChannel = await client.channels.fetch(CHANNEL_ID);
-  if (testChannel?.isTextBased?.()) {
-    testChannel.send("✅ Bot is online and ready to post inventory changes!");
+  // 🔹 Initial check and setup for all IDs
+  console.log("Performing initial inventory fetch for all IDs...");
+  for (const steamId of STEAM_IDS) {
+    const testItems = await fetchInventory(steamId);
+    if (testItems) {
+      lastInventories[steamId] = testItems;
+    } else {
+      console.log(`Failed initial fetch for ${steamId}. Will try again later.`);
+    }
   }
 
-  // 🔹 Immediate test fetch of inventory
-  const testItems = await fetchInventory();
-  if (testItems) {
-    console.log("Fetched inventory (first 5 items):", testItems.slice(0, 5));
-  } else {
-    console.log("Failed to fetch inventory for test.");
+  const testChannel = await client.channels.fetch(CHANNEL_ID);
+  if (testChannel?.isTextBased?.()) {
+    testChannel.send(`✅ Bot is online and ready to post inventory changes for **${STEAM_IDS.length}** IDs!`);
   }
 
   // Start regular interval for checking changes
@@ -121,9 +159,10 @@ client.once("ready", async () => {
 
 client.login(TOKEN);
 
-// --------------------------
-// Express web server for UptimeRobot
-// --------------------------
+// ------------------------------------
+// 5. EXPRESS WEB SERVER (for UptimeRobot)
+// ------------------------------------
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 
