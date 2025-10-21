@@ -112,8 +112,13 @@ async function checkChanges() {
       if (added.length || removed.length) {
         const channel = await client.channels.fetch(CHANNEL_ID);
         if (channel?.isTextBased?.()) {
-          // You can modify the mention and message as needed
-          let msg = `<@677917996450054170> ⚡ Inventory change detected for **STEAM ID: ${steamId}**:\n`;
+          
+          // Construct the Steam profile link
+          const profileLink = `https://steamcommunity.com/profiles/${steamId}/`;
+          
+          // Update the message to use the profile link instead of the raw ID
+          let msg = `<@677917996450054170> ⚡ Inventory change detected for **[Steam Profile](${profileLink})**:\n`;
+          
           if (added.length) msg += `🟢 Added: ${added.join(", ")}\n`;
           if (removed.length) msg += `🔴 Removed: ${removed.join(", ")}\n`;
           
