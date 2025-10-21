@@ -31,7 +31,7 @@ let lastInventories = {}; // { 'steamid1': [...items], 'steamid2': [...items], .
 // 2. HELPER FUNCTIONS
 // ------------------------------------
 
-// ✨ NEW: Helper function to pause execution
+// Helper function to pause execution
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 // Fetch inventory for a specific Steam ID
@@ -103,8 +103,8 @@ async function checkChanges() {
   for (const steamId of STEAM_IDS) {
     const newItems = await fetchInventory(steamId);
     
-    // ✨ FIX 1: Add a delay after each fetch to avoid rate limits
-    await delay(1500); // Wait 1.5 seconds between each ID check
+    // 🔥 CRITICAL FIX: Increased delay to 5 seconds to combat aggressive 429 errors.
+    await delay(5000); 
 
     if (!newItems) {
       console.log(`Inventory state for ${steamId} was not updated due to an error.`);
@@ -155,7 +155,7 @@ client.once("ready", async () => {
   for (const steamId of STEAM_IDS) {
     const testItems = await fetchInventory(steamId);
     // Add a small delay for the initial load too
-    await delay(1500); 
+    await delay(5000); 
 
     if (testItems) {
       lastInventories[steamId] = testItems;
@@ -166,11 +166,11 @@ client.once("ready", async () => {
 
   const testChannel = await client.channels.fetch(CHANNEL_ID);
   if (testChannel?.isTextBased?.()) {
-    testChannel.send(`✅ Bot is online and ready to post inventory changes for **${STEAM_IDS.length}** IDs!`);
+    testChannel.send(`✅ Bot is online and ready to post inventory changes for **${STEAM_IDS.length}** IDs! (Checking every 10 minutes)`);
   }
 
-  // ✨ FIX 2: Increase regular interval to 5 minutes (300 seconds)
-  setInterval(checkChanges, 300 * 1000); 
+  // 🔥 CRITICAL FIX: Increase regular interval to 10 minutes (600 seconds)
+  setInterval(checkChanges, 600 * 1000); 
 });
 
 client.login(TOKEN);
