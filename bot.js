@@ -31,6 +31,9 @@ let lastInventories = {}; // { 'steamid1': [...items], 'steamid2': [...items], .
 // 2. HELPER FUNCTIONS
 // ------------------------------------
 
+// ✨ NEW: Helper function to pause execution
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 // Fetch inventory for a specific Steam ID
 async function fetchInventory(steamId) {
   const url = `https://steamcommunity.com/inventory/${steamId}/${APPID}/${CONTEXTID}?l=english&count=500`;
@@ -38,6 +41,7 @@ async function fetchInventory(steamId) {
     const res = await fetch(url, {
       headers: { "User-Agent": "Mozilla/5.0 (compatible; InventoryBot/1.0)" }
     });
+    // Check for HTTP errors like 429
     if (!res.ok) {
       console.log(`HTTP Error for ${steamId}:`, res.status);
       return null;
@@ -98,8 +102,12 @@ async function checkChanges() {
 
   for (const steamId of STEAM_IDS) {
     const newItems = await fetchInventory(steamId);
+    
+    // ✨ FIX 1: Add a delay after each fetch to avoid rate limits
+    await delay(1500); // Wait 1.5 seconds between each ID check
+
     if (!newItems) {
-      console.log(`Inventory fetch failed for ${steamId}, skipping this interval.`);
+      console.log(`Inventory state for ${steamId} was not updated due to an error.`);
       continue;
     }
 
@@ -146,6 +154,9 @@ client.once("ready", async () => {
   console.log("Performing initial inventory fetch for all IDs...");
   for (const steamId of STEAM_IDS) {
     const testItems = await fetchInventory(steamId);
+    // Add a small delay for the initial load too
+    await delay(1500); 
+
     if (testItems) {
       lastInventories[steamId] = testItems;
     } else {
@@ -158,8 +169,8 @@ client.once("ready", async () => {
     testChannel.send(`✅ Bot is online and ready to post inventory changes for **${STEAM_IDS.length}** IDs!`);
   }
 
-  // Start regular interval for checking changes
-  setInterval(checkChanges, 60 * 1000); // every 60s
+  // ✨ FIX 2: Increase regular interval to 5 minutes (300 seconds)
+  setInterval(checkChanges, 300 * 1000); 
 });
 
 client.login(TOKEN);
